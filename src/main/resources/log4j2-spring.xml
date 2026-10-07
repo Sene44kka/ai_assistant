@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<Configuration status="WARN" monitorInterval="30">
+    <Properties>
+        <Property name="LOG_PATTERN">%d{yyyy-MM-dd HH:mm:ss.SSS} [%t] %-5level %logger{36} - %msg%n</Property>
+        <Property name="LOG_PATH" value="/var/log/taro_bot"/>
+        <Property name="LOG_FILE" value="taro_bot"/>
+    </Properties>
+
+    <Appenders>
+        <!-- Console appender для dev профиля -->
+        <Console name="Console" target="SYSTEM_OUT" condition='equalsIgnoreCase("${spring.profiles.active}","dev")'>
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+        </Console>
+
+        <!-- File appender для prod -->
+        <RollingFile name="File"
+                     fileName="${LOG_PATH}/${LOG_FILE}.log"
+                     filePattern="${LOG_PATH}/${LOG_FILE}-%d{yyyy-MM-dd}.log"
+                     condition='equalsIgnoreCase("${spring.profiles.active}","prod")'>
+            <PatternLayout pattern="${LOG_PATTERN}"/>
+            <Policies>
+                <!-- Ротация каждый день в полночь -->
+                <TimeBasedTriggeringPolicy interval="1" modulate="true"/>
+            </Policies>
+            <!-- Удаление логов старше 7 дней -->
+            <DefaultRolloverStrategy>
+                <Delete basePath="${LOG_PATH}" maxDepth="1">
+                    <IfFileName glob="${LOG_FILE}-*.log" />
+                    <IfLastModified age="7d" />
+                </Delete>
+            </DefaultRolloverStrategy>
+        </RollingFile>
+    </Appenders>
+
+    <Loggers>
+        <Root level="info">
+            <AppenderRef ref="Console" condition='equalsIgnoreCase("${spring.profiles.active}","dev")'/>
+            <AppenderRef ref="File" condition='equalsIgnoreCase("${spring.profiles.active}","prod")'/>
+        </Root>
+    </Loggers>
+</Configuration>

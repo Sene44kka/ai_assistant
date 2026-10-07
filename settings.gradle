@@ -1,0 +1,10 @@
+rootProject.name = 'ai_assistant'
+
+//Модули
+includeProject('core', 'modules/core')
+includeProject('dbeaver_proxy', 'modules/dbeaver_proxy')
+
+void includeProject(String name, String path) {
+    include ":$name"
+    project(":$name").projectDir = new File(settingsDir, path)
+}

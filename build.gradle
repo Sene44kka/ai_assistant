@@ -1,0 +1,67 @@
+plugins {
+    id 'java'
+    alias(libs.plugins.spring.boot)
+    alias(libs.plugins.spring.dependency.management)
+}
+
+group = 'ru.skripov'
+version = '1.0.0'
+description = 'ai_assistant'
+
+java {
+    toolchain {
+        languageVersion = JavaLanguageVersion.of(25)
+    }
+}
+
+configurations {
+    compileOnly {
+        extendsFrom annotationProcessor
+    }
+    configureEach {
+        exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+    }
+}
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    // Spring Web
+    implementation libs.bundles.spring.web
+
+    // Database
+    implementation libs.bundles.spring.data
+    implementation libs.bundles.database
+
+    //Рефлексия
+    implementation libs.reflections
+
+    //Логирование
+    implementation libs.bundles.logging
+
+    //Для работы MapStruct + Lombok
+    implementation libs.bundles.mapstruct
+    compileOnly libs.bundles.lombok.mapstruct.compile
+    annotationProcessor libs.bundles.lombok.mapstruct.processor
+
+    //swagger
+    implementation libs.bundles.swagger
+
+    // Jackson
+    implementation libs.bundles.json
+
+    // HTTP клиент
+    implementation libs.okhttp
+
+    //modules
+    implementation project(':dbeaver_proxy')
+
+    // Тесты
+    implementation libs.bundles.testing
+}
+
+tasks.named('test') {
+    useJUnitPlatform()
+}

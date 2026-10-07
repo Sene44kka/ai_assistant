@@ -1,0 +1,48 @@
+plugins {
+	id 'java'
+}
+
+group = 'ru.skripov'
+version = '1.0.0'
+
+java {
+	toolchain {
+		languageVersion = JavaLanguageVersion.of(25)
+	}
+}
+
+configurations {
+	configureEach {
+		exclude group: 'org.springframework.boot', module: 'spring-boot-starter-logging'
+	}
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	// Spring Web
+	implementation libs.bundles.spring.web
+
+	// Database
+	implementation libs.bundles.spring.data
+	implementation libs.bundles.database
+
+	// MapStruct + Lombok
+	implementation libs.bundles.mapstruct
+	compileOnly libs.bundles.lombok.mapstruct.compile
+	annotationProcessor libs.bundles.lombok.mapstruct.processor
+
+	// Logging
+	implementation libs.bundles.logging
+
+	// Kafka
+	implementation libs.spring.kafka
+
+	// Swagger
+	implementation libs.bundles.swagger
+
+	// HTTP клиент
+	implementation libs.okhttp
+}

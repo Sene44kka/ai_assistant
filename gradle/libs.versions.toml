@@ -1,0 +1,175 @@
+[versions]
+# Spring
+spring-boot = "4.1.0-RC1"
+spring-modulith = "2.1.0-RC1"
+spring-security-test = "7.1.0-RC1"
+
+spring-boot-s3 = "4.0.0"
+
+# Security
+jjwt = "0.13.0"
+jwt-client = "5.2.2"
+
+# Database
+postgresql = "42.7.8"
+h2 = "2.4.240"
+
+# Utilities
+lombok = "1.18.42"
+mapstruct = "1.6.3"
+lombok-mapstruct-binding = "0.2.0"
+jackson-datatype-jsr310 = "2.21.0"
+
+# Logging
+log4j = "2.25.3"
+
+# Kafka
+spring-kafka = "4.0.0"
+
+# Swagger
+springdoc = "3.0.0"
+
+# Reflections
+reflections = "0.10.2"
+
+# Okhttp
+okhttp = "5.3.2"
+
+# Testing
+junit = "4.13.2"
+junit-platform = "6.0.1"
+
+[libraries]
+# Spring Boot Starters
+spring-boot-starter-web = { module = "org.springframework.boot:spring-boot-starter-web", version.ref = "spring-boot" }
+spring-boot-starter-security = { module = "org.springframework.boot:spring-boot-starter-security", version.ref = "spring-boot" }
+spring-boot-starter-data-jpa = { module = "org.springframework.boot:spring-boot-starter-data-jpa", version.ref = "spring-boot" }
+spring-boot-starter-jdbc = { module = "org.springframework.boot:spring-boot-starter-jdbc", version.ref = "spring-boot" }
+spring-boot-starter-restclient = { module = "org.springframework.boot:spring-boot-starter-restclient", version.ref = "spring-boot" }
+spring-boot-starter-webflux = { module = "org.springframework.boot:spring-boot-starter-webflux", version.ref = "spring-boot" }
+spring-boot-starter-webmvc = { module = "org.springframework.boot:spring-boot-starter-webmvc", version.ref = "spring-boot" }
+spring-boot-configuration-processor = { module = "org.springframework.boot:spring-boot-configuration-processor", version.ref = "spring-boot" }
+spring-boot-docker-compose = { module = "org.springframework.boot:spring-boot-docker-compose", version.ref = "spring-boot" }
+spring-boot-autoconfigure = { module = "org.springframework.boot:spring-boot-autoconfigure", version.ref = "spring-boot" }
+spring-boot-starter-actuator = { module = "org.springframework.boot:spring-boot-starter-actuator", version.ref = "spring-boot" }
+spring-cloud-aws-starter-s3 = { module = "io.awspring.cloud:spring-cloud-aws-starter-s3", version.ref = "spring-boot-s3"}
+
+# JWT
+jjwt-api = { module = "io.jsonwebtoken:jjwt-api", version.ref = "jjwt" }
+jjwt-impl = { module = "io.jsonwebtoken:jjwt-impl", version.ref = "jjwt" }
+jjwt-jackson = { module = "io.jsonwebtoken:jjwt-jackson", version.ref = "jjwt" }
+jwt-client = { module = "org.entur.jwt-rs:jwt-client-spring-core", version.ref = "jwt-client"}
+
+# Database
+postgresql = { module = "org.postgresql:postgresql", version.ref = "postgresql" }
+h2 = { module = "com.h2database:h2", version.ref = "h2" }
+spring-boot-liquibase = { module = "org.springframework.boot:spring-boot-liquibase", version.ref = "spring-boot" }
+
+# Utilities
+lombok = { module = "org.projectlombok:lombok", version.ref = "lombok" }
+mapstruct = { module = "org.mapstruct:mapstruct", version.ref = "mapstruct" }
+mapstruct-processor = { module = "org.mapstruct:mapstruct-processor", version.ref = "mapstruct" }
+lombok-mapstruct-binding = { module = "org.projectlombok:lombok-mapstruct-binding", version.ref = "lombok-mapstruct-binding" }
+jackson-datatype-jsr310 = { module = "com.fasterxml.jackson.datatype:jackson-datatype-jsr310", version.ref = "jackson-datatype-jsr310" }
+
+# Logging
+log4j-slf4j2-impl = { module = "org.apache.logging.log4j:log4j-slf4j2-impl", version.ref = "log4j" }
+log4j-core = { module = "org.apache.logging.log4j:log4j-core", version.ref = "log4j" }
+
+# Kafka
+spring-kafka = { module = "org.springframework.kafka:spring-kafka", version.ref = "spring-kafka" }
+
+# Swagger
+springdoc-openapi-starter-webmvc-ui = { module = "org.springdoc:springdoc-openapi-starter-webmvc-ui", version.ref = "springdoc" }
+
+# Reflections
+reflections = { module = "org.reflections:reflections", version.ref = "reflections" }
+
+# Okhttp
+okhttp = { module = "com.squareup.okhttp3:okhttp", version.ref = "okhttp" }
+
+# Testing
+spring-boot-starter-test = { module = "org.springframework.boot:spring-boot-starter-test", version.ref = "spring-boot" }
+junit = { module = "junit:junit", version.ref = "junit" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junit-platform" }
+spring-security-test = { module = "org.springframework.security:spring-security-test", version.ref = "spring-security-test" }
+spring-modulith-starter-test = { module = "org.springframework.modulith:spring-modulith-starter-test", version.ref = "spring-modulith" }
+spring-boot-starter-webmvc-test = { module = "org.springframework.boot:spring-boot-starter-webmvc-test", version.ref = "spring-boot" }
+spring-boot-starter-restclient-test = { module = "org.springframework.boot:spring-boot-starter-restclient-test", version.ref = "spring-boot" }
+
+[bundles]
+spring-web = [
+    "spring-boot-starter-web",
+    "spring-boot-starter-webmvc",
+    "spring-boot-starter-restclient",
+    "spring-boot-starter-webflux"
+]
+
+spring-data = [
+    "spring-boot-starter-data-jpa",
+    "spring-boot-starter-jdbc"
+]
+
+metrics = [
+    "spring-boot-starter-actuator"
+]
+
+jwt = [
+    "spring-boot-starter-security",
+    "jjwt-api",
+    "jjwt-impl",
+    "jjwt-jackson",
+    "jwt-client"
+]
+
+database = [
+    "postgresql",
+    "spring-boot-liquibase"
+]
+
+logging = [
+    "log4j-core",
+    "log4j-slf4j2-impl"
+]
+
+mapstruct = [
+    "mapstruct"
+]
+
+lombok-mapstruct-compile = [
+    "lombok",
+    "lombok-mapstruct-binding"
+]
+
+lombok-mapstruct-processor = [
+    "lombok",
+    "mapstruct-processor",
+    "lombok-mapstruct-binding"
+]
+
+swagger = [
+    "springdoc-openapi-starter-webmvc-ui"
+]
+
+json = [
+    "jackson-datatype-jsr310"
+]
+
+testing = [
+    "spring-modulith-starter-test",
+    "spring-boot-starter-test",
+    "spring-security-test",
+    "spring-boot-starter-webmvc-test",
+    "spring-boot-starter-restclient-test",
+    "h2",
+    "junit",
+    "junit-platform-launcher"
+]
+
+docker = [
+    "spring-boot-docker-compose"
+]
+
+[plugins]
+spring-boot = { id = "org.springframework.boot", version.ref = "spring-boot" }
+spring-dependency-management = { id = "io.spring.dependency-management", version = "1.1.7" }

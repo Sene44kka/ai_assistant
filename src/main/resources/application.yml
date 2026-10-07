@@ -1,0 +1,45 @@
+spring.application.name: ai_assistant
+server.port: 8085
+
+spring:
+  main:
+    #Для отладки циклических зависимостей
+    allow-circular-references: true
+
+  datasource:
+    url: jdbc:h2:mem:testdb;MODE=PostgreSQL;DB_CLOSE_DELAY=-1;DB_CLOSE_ON_EXIT=FALSE
+    username: login
+    password: pass
+    driver-class-name: org.h2.Driver
+
+  h2:
+    console:
+      enabled: true
+      path: /h2-console
+
+  jpa:
+    database-platform: org.hibernate.dialect.H2Dialect
+    hibernate:
+      ddl-auto: validate
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+
+  #liquibase settings
+  liquibase:
+    change-log: classpath:db/changelog/changelog.xml
+    enabled: true
+
+logging:
+  charset:
+    console: UTF-8
+    file: UTF-8
+  level:
+    liquibase: INFO
+    # Уровень логирования
+    root: INFO
+    ru.skripov: INFO
+    org.apache.tomcat: INFO
+    org.springframework.boot.web.embedded.tomcat: INFO
+    org.apache.catalina: INFO
