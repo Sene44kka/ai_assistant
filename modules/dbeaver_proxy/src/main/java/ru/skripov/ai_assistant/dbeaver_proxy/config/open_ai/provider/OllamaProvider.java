@@ -40,7 +40,7 @@ public class OllamaProvider implements AiProvider {
                 .map(m -> new OllamaChatRequest.Message(m.getRole(), m.getContent()))
                 .toList();
 
-        String answer = callOllama(ollamaMessages, request.getTemperature());
+        String answer = callOllama(ollamaMessages, request.getTemperature(), null, false);
 
         return buildChatResponse(answer);
     }
@@ -48,21 +48,26 @@ public class OllamaProvider implements AiProvider {
     @Override
     public OpenAiResponsesResponse responses(OpenAiResponsesRequest request) {
         List<OllamaChatRequest.Message> ollamaMessages = convertResponsesToOllamaMessages(request);
+        List<OllamaTool> ollamaTools = convertTools(request.getTools());
 
-        String answer = callOllama(ollamaMessages, request.getTemperature());
+        String answer = callOllama(ollamaMessages, request.getTemperature(), ollamaTools, request.getStream());
 
         return buildResponsesResponse(answer);
     }
 
-    private String callOllama(List<OllamaChatRequest.Message> messages, Double temperature) {
+    private String callOllama(List<OllamaChatRequest.Message> messages,
+                              Double temperature,
+                              List<OllamaTool> tools,
+                              boolean stream) {
         OllamaChatRequest.Options options = new OllamaChatRequest.Options();
         options.setTemperature(temperature != null ? temperature : 0.1);
-        options.setNumCtx(8192);   // 👈 можно увеличить, если контекст модели больше
 
-        OllamaChatRequest ollamaRequest = new OllamaChatRequest(defaultModel, messages, false, options, false);
+        OllamaChatRequest ollamaRequest = new OllamaChatRequest(defaultModel, messages, stream, false, options, tools);
 
-        log.info("→ Ollama: POST {}/api/chat, model={}, messages={}, temp={}, think={}",
-                ollamaUrl, defaultModel, messages.size(), options.getTemperature(), ollamaRequest.getThink());
+        log.info("→ Ollama: POST {}/api/chat, model={}, messages={}, tools={}, temp={}, think=false",
+                ollamaUrl, defaultModel, messages.size(),
+                tools != null ? tools.size() : 0,
+                options.getTemperature());
 
         OllamaChatResponse response = webClientBuilder
                 .baseUrl(ollamaUrl)
@@ -79,9 +84,20 @@ public class OllamaProvider implements AiProvider {
             throw new IllegalStateException("Empty response from Ollama");
         }
 
-        String answer = response.getMessage().getContent();
-        log.info("← Ollama: {} chars", answer.length());
-        return answer;
+        OllamaChatResponse.Message msg = response.getMessage();
+        log.info("← Ollama: content={} chars, tool_calls={}",
+                msg.getContent() != null ? msg.getContent().length() : 0,
+                msg.getToolCalls() != null ? msg.getToolCalls().size() : 0);
+
+        if (msg.getToolCalls() != null && !msg.getToolCalls().isEmpty()) {
+            for (OllamaToolCall tc : msg.getToolCalls()) {
+                log.info("   tool_call: name={}, args={}",
+                        tc.getFunction().getName(),
+                        tc.getFunction().getArguments());
+            }
+        }
+
+        return msg.getContent();
     }
 
     private List<OllamaChatRequest.Message> convertResponsesToOllamaMessages(OpenAiResponsesRequest request) {
@@ -115,6 +131,36 @@ public class OllamaProvider implements AiProvider {
 
         return messages;
     }
+
+    /**
+     * OpenAiResponsesRequest.tools (формат Responses API / Chat Completions) → List<OllamaTool> (формат Ollama).
+     */
+    private List<OllamaTool> convertTools(List<Tool> tools) {
+        if (tools == null || tools.isEmpty()) {
+            return null;
+        }
+
+        List<OllamaTool> result = new ArrayList<>();
+
+        for (Tool tool : tools) {
+            if (tool.getName() == null || tool.getName().isBlank()) {
+                log.warn("Skipping tool without name: {}", tool);
+                continue;
+            }
+
+            OllamaTool.Function function = new OllamaTool.Function(
+                    tool.getName(),
+                    tool.getDescription(),
+                    tool.getParameters()
+            );
+
+            result.add(new OllamaTool("function", function));
+        }
+
+        log.info("→ Converted {} tools to Ollama format", result.size());
+        return result;
+    }
+
 
     private String extractText(Object content) {
         if (content == null) {

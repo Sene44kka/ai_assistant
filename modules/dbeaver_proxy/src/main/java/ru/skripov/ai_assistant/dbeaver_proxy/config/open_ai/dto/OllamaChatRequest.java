@@ -18,14 +18,9 @@ public class OllamaChatRequest {
     private String model;
     private List<Message> messages;
     private boolean stream;
-    private Options options;
     private Boolean think; //Включать ли размышление для модели
-
-    public OllamaChatRequest(String model, List<Message> messages, boolean stream) {
-        this.model = model;
-        this.messages = messages;
-        this.stream = stream;
-    }
+    private Options options;
+    private List<OllamaTool> tools;
 
     @Data
     @NoArgsConstructor

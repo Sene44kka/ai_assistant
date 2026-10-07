@@ -1,7 +1,10 @@
 package ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.Data;
+
+import java.util.List;
 
 /**
  * Ответ от Ollama (POST /api/chat, stream=false).
@@ -30,5 +33,11 @@ public class OllamaChatResponse {
     public static class Message {
         private String role;
         private String content;
+
+        @JsonProperty("tool_calls")
+        private List<OllamaToolCall> toolCalls;
+
+        @JsonProperty("thinking")
+        private String thinking;
     }
 }
