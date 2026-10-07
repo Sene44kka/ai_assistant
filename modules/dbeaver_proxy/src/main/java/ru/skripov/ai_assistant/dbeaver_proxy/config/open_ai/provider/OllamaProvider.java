@@ -57,7 +57,6 @@ public class OllamaProvider implements AiProvider {
             return buildFunctionCallResponse(msg.getToolCalls());
         }
 
-        // 👇 Иначе — обычный текст
         return buildResponsesResponse(msg.getContent());
     }
 
@@ -107,16 +106,14 @@ public class OllamaProvider implements AiProvider {
     }
 
     private List<OllamaChatRequest.Message> convertResponsesToOllamaMessages(OpenAiResponsesRequest request) {
-        List<OllamaChatRequest.Message> all = new ArrayList<>();
+        List<OllamaChatRequest.Message> result = new ArrayList<>();
 
         Object input = request.getInput();
-        if (input instanceof String s) {
-            all.add(new OllamaChatRequest.Message("user", s));
-            return all;
-        }
-
         if (!(input instanceof List<?> list)) {
-            return all;
+            if (input instanceof String s) {
+                result.add(new OllamaChatRequest.Message("user", s));
+            }
+            return result;
         }
 
         for (Object item : list) {
@@ -124,60 +121,50 @@ public class OllamaProvider implements AiProvider {
 
             String type = map.get("type") != null ? map.get("type").toString() : "";
 
-            // ─── function_call: пропускаем, модель сама знает, что вызвала ───
             if ("function_call".equals(type)) {
                 continue;
             }
 
-            // ─── function_call_output: результат tool → передаём как user ───
             if ("function_call_output".equals(type)) {
                 String output = map.get("output") != null ? map.get("output").toString() : "";
                 if (!output.isBlank()) {
-                    all.add(new OllamaChatRequest.Message(
+                    // Обрезаем огромный вывод до разумных размеров
+                    result.add(new OllamaChatRequest.Message(
                             "user",
-                            "[Tool result]\n" + output
+                            "[Tool result]\n" + truncate(output, 4000)
                     ));
                 }
                 continue;
             }
 
-            // ─── обычное message ───
             String role = map.get("role") != null ? map.get("role").toString() : "user";
             String text = extractText(map.get("content"));
-            if (text != null && !text.isBlank()) {
-                // ⚠️ Пропускаем assistant-сообщения с "was completed" —
-                // они дублируют function_call_output
-                if ("assistant".equals(role) && text.startsWith("db_") && text.contains("was completed")) {
-                    continue;
-                }
-                all.add(new OllamaChatRequest.Message(role, text));
+            if (text == null || text.isBlank()) continue;
+
+            if ("assistant".equals(role)
+                    && text.startsWith("db_")
+                    && text.contains("was completed")) {
+                continue;
             }
+
+            result.add(new OllamaChatRequest.Message(role, text));
         }
 
-        // 👇 Фильтрация дублей: system + assistant + ПОСЛЕДНЕЕ user
-        List<OllamaChatRequest.Message> result = new ArrayList<>();
-
-        // 1. Первый system
-        all.stream()
-                .filter(m -> "system".equals(m.getRole()))
-                .findFirst()
-                .ifPresent(result::add);
-
-        // 2. Все assistant
-        all.stream()
-                .filter(m -> "assistant".equals(m.getRole()))
-                .forEach(result::add);
-
-        // 3. Последнее user (мог быть function_call_output)
-        for (int i = all.size() - 1; i >= 0; i--) {
-            if ("user".equals(all.get(i).getRole())) {
-                result.add(all.get(i));
-                break;
-            }
+        log.info("→ Converted messages: {} in → {} out", list.size(), result.size());
+        for (int i = 0; i < result.size(); i++) {
+            OllamaChatRequest.Message m = result.get(i);
+            String preview = m.getContent() != null && m.getContent().length() > 120
+                    ? m.getContent().substring(0, 120) + "..."
+                    : m.getContent();
+            log.info("   [{}] {}: {}", i, m.getRole(), preview);
         }
 
-        log.info("→ Converted messages: {} in → {} out", all.size(), result.size());
         return result;
+    }
+
+    private String truncate(String s, int max) {
+        if (s == null) return "";
+        return s.length() > max ? s.substring(0, max) + "...[truncated]" : s;
     }
 
     /**
