@@ -1,5 +1,6 @@
 package ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.provider;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
@@ -24,6 +25,7 @@ public class OllamaProvider implements AiProvider {
     private String defaultModel;
 
     private final WebClient.Builder webClientBuilder;
+    private final ObjectMapper objectMapper = new ObjectMapper();
 
     public OllamaProvider(WebClient.Builder webClientBuilder) {
         this.webClientBuilder = webClientBuilder;
@@ -40,9 +42,8 @@ public class OllamaProvider implements AiProvider {
                 .map(m -> new OllamaChatRequest.Message(m.getRole(), m.getContent()))
                 .toList();
 
-        String answer = callOllama(ollamaMessages, request.getTemperature(), null, false);
-
-        return buildChatResponse(answer);
+        OllamaChatResponse.Message msg = callOllama(ollamaMessages, request.getTemperature(), null);
+        return buildChatResponse(msg.getContent());
     }
 
     @Override
@@ -50,21 +51,27 @@ public class OllamaProvider implements AiProvider {
         List<OllamaChatRequest.Message> ollamaMessages = convertResponsesToOllamaMessages(request);
         List<OllamaTool> ollamaTools = convertTools(request.getTools());
 
-        String answer = callOllama(ollamaMessages, request.getTemperature(), ollamaTools, request.getStream());
+        OllamaChatResponse.Message msg = callOllama(ollamaMessages, request.getTemperature(), ollamaTools);
 
-        return buildResponsesResponse(answer);
+        if (msg.getToolCalls() != null && !msg.getToolCalls().isEmpty()) {
+            return buildFunctionCallResponse(msg.getToolCalls());
+        }
+
+        // 👇 Иначе — обычный текст
+        return buildResponsesResponse(msg.getContent());
     }
 
-    private String callOllama(List<OllamaChatRequest.Message> messages,
-                              Double temperature,
-                              List<OllamaTool> tools,
-                              boolean stream) {
+    private OllamaChatResponse.Message callOllama(List<OllamaChatRequest.Message> messages,
+                                                  Double temperature,
+                                                  List<OllamaTool> tools) {
         OllamaChatRequest.Options options = new OllamaChatRequest.Options();
         options.setTemperature(temperature != null ? temperature : 0.1);
 
-        OllamaChatRequest ollamaRequest = new OllamaChatRequest(defaultModel, messages, stream, false, options, tools);
+        OllamaChatRequest ollamaRequest = new OllamaChatRequest(
+                defaultModel, messages, false, false, options, tools
+        );
 
-        log.info("→ Ollama: POST {}/api/chat, model={}, messages={}, tools={}, temp={}, think=false",
+        log.info("→ Ollama: POST {}/api/chat, model={}, messages={}, tools={}, temp={}",
                 ollamaUrl, defaultModel, messages.size(),
                 tools != null ? tools.size() : 0,
                 options.getTemperature());
@@ -89,15 +96,14 @@ public class OllamaProvider implements AiProvider {
                 msg.getContent() != null ? msg.getContent().length() : 0,
                 msg.getToolCalls() != null ? msg.getToolCalls().size() : 0);
 
-        if (msg.getToolCalls() != null && !msg.getToolCalls().isEmpty()) {
+        if (msg.getToolCalls() != null) {
             for (OllamaToolCall tc : msg.getToolCalls()) {
                 log.info("   tool_call: name={}, args={}",
-                        tc.getFunction().getName(),
-                        tc.getFunction().getArguments());
+                        tc.getFunction().getName(), tc.getFunction().getArguments());
             }
         }
 
-        return msg.getContent();
+        return msg;
     }
 
     private List<OllamaChatRequest.Message> convertResponsesToOllamaMessages(OpenAiResponsesRequest request) {
@@ -191,6 +197,47 @@ public class OllamaProvider implements AiProvider {
         }
 
         return content.toString();
+    }
+
+    private OpenAiResponsesResponse buildFunctionCallResponse(List<OllamaToolCall> toolCalls) {
+        List<Object> output = new ArrayList<>();
+
+        for (OllamaToolCall tc : toolCalls) {
+            String callId = "call_" + UUID.randomUUID().toString().replace("-", "");
+            String fcId = "fc_" + UUID.randomUUID().toString().replace("-", "");
+
+            String argsJson;
+            try {
+                argsJson = objectMapper.writeValueAsString(tc.getFunction().getArguments());
+            } catch (Exception e) {
+                log.warn("Cannot serialize tool args", e);
+                argsJson = "{}";
+            }
+
+            OpenAiResponsesResponse.FunctionCallItem fc =
+                    new OpenAiResponsesResponse.FunctionCallItem(
+                            "function_call",
+                            fcId,
+                            callId,
+                            tc.getFunction().getName(),
+                            argsJson,
+                            "completed"
+                    );
+
+            output.add(fc);
+            log.info("→ Returning function_call: name={}, callId={}, args={}",
+                    tc.getFunction().getName(), callId, argsJson);
+        }
+
+        return new OpenAiResponsesResponse(
+                "resp_" + UUID.randomUUID().toString().replace("-", ""),
+                "response",
+                "completed",
+                defaultModel,
+                System.currentTimeMillis() / 1000,
+                output,
+                new OpenAiResponsesResponse.Usage(0, 0, 0)
+        );
     }
 
     private OpenAiChatResponse buildChatResponse(String answer) {

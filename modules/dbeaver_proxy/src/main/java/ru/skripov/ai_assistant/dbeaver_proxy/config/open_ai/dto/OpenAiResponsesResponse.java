@@ -18,7 +18,7 @@ public class OpenAiResponsesResponse {
     @JsonProperty("created_at")
     private long createdAt;
 
-    private List<OutputItem> output;
+    private List<Object> output;
     private Usage usage;
 
     @Data
@@ -26,8 +26,8 @@ public class OpenAiResponsesResponse {
     public static class OutputItem {
         private String type;
         private String id;
-        private String role;
         private String status;
+        private String role;
         private List<ContentBlock> content;
     }
 
@@ -37,6 +37,17 @@ public class OpenAiResponsesResponse {
         private String type;
         private String text;
         private List<Object> annotations;
+    }
+
+    @Data
+    @AllArgsConstructor
+    public static class FunctionCallItem {
+        private String type;
+        private String id;
+        private String callId;
+        private String name;
+        private String arguments;
+        private String status;
     }
 
     @Data
