@@ -106,32 +106,31 @@ public class OllamaProvider implements AiProvider {
     }
 
     private List<OllamaChatRequest.Message> convertResponsesToOllamaMessages(OpenAiResponsesRequest request) {
-        List<OllamaChatRequest.Message> result = new ArrayList<>();
+        List<OllamaChatRequest.Message> all = new ArrayList<>();
 
         Object input = request.getInput();
         if (!(input instanceof List<?> list)) {
             if (input instanceof String s) {
-                result.add(new OllamaChatRequest.Message("user", s));
+                all.add(new OllamaChatRequest.Message("user", s));
             }
-            return result;
+            return all;
         }
+
+        String lastSystem = null;
 
         for (Object item : list) {
             if (!(item instanceof Map<?, ?> map)) continue;
 
             String type = map.get("type") != null ? map.get("type").toString() : "";
 
-            if ("function_call".equals(type)) {
-                continue;
-            }
+            if ("function_call".equals(type)) continue;
 
             if ("function_call_output".equals(type)) {
                 String output = map.get("output") != null ? map.get("output").toString() : "";
                 if (!output.isBlank()) {
-                    // Обрезаем огромный вывод до разумных размеров
-                    result.add(new OllamaChatRequest.Message(
+                    all.add(new OllamaChatRequest.Message(
                             "user",
-                            "[Tool result]\n" + truncate(output, 4000)
+                            "[Tool result]\n" + truncate(output, 6000)
                     ));
                 }
                 continue;
@@ -141,22 +140,45 @@ public class OllamaProvider implements AiProvider {
             String text = extractText(map.get("content"));
             if (text == null || text.isBlank()) continue;
 
-            if ("assistant".equals(role)
-                    && text.startsWith("db_")
-                    && text.contains("was completed")) {
+            if ("system".equals(role)) {
+                lastSystem = text;
                 continue;
             }
 
-            result.add(new OllamaChatRequest.Message(role, text));
+            if ("assistant".equals(role)
+                    && text.contains("was completed")
+                    && text.length() > 200) {
+                continue;
+            }
+
+            all.add(new OllamaChatRequest.Message(role, text));
         }
 
-        log.info("→ Converted messages: {} in → {} out", list.size(), result.size());
+        List<OllamaChatRequest.Message> result = new ArrayList<>();
+
+        if (lastSystem != null) {
+            result.add(new OllamaChatRequest.Message("system", lastSystem));
+        }
+
+        int maxHistory = 10;
+        int fromIndex = Math.max(0, all.size() - maxHistory);
+        result.addAll(all.subList(fromIndex, all.size()));
+
+        log.info("→ Converted messages: {} in → {} out (truncated to last {})",
+                list.size(), result.size(), maxHistory);
         for (int i = 0; i < result.size(); i++) {
             OllamaChatRequest.Message m = result.get(i);
-            String preview = m.getContent() != null && m.getContent().length() > 120
-                    ? m.getContent().substring(0, 120) + "..."
+            String preview = m.getContent() != null && m.getContent().length() > 100
+                    ? m.getContent().substring(0, 100).replace("\n", " ") + "..."
                     : m.getContent();
             log.info("   [{}] {}: {}", i, m.getRole(), preview);
+        }
+
+        if (!result.isEmpty()) {
+            OllamaChatRequest.Message last = result.get(result.size() - 1);
+            if (!"user".equals(last.getRole())) {
+                log.warn("⚠️ Last message is NOT user! Role={}", last.getRole());
+            }
         }
 
         return result;
