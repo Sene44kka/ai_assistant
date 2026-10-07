@@ -107,35 +107,77 @@ public class OllamaProvider implements AiProvider {
     }
 
     private List<OllamaChatRequest.Message> convertResponsesToOllamaMessages(OpenAiResponsesRequest request) {
-        List<OllamaChatRequest.Message> messages = new ArrayList<>();
-
-        // instructions → system (если есть отдельным полем)
-        if (request.getInstructions() != null && !request.getInstructions().isBlank()) {
-            messages.add(new OllamaChatRequest.Message("system", request.getInstructions()));
-        }
+        List<OllamaChatRequest.Message> all = new ArrayList<>();
 
         Object input = request.getInput();
         if (input instanceof String s) {
-            messages.add(new OllamaChatRequest.Message("user", s));
-            return messages;
+            all.add(new OllamaChatRequest.Message("user", s));
+            return all;
         }
 
-        if (input instanceof List<?> list) {
-            for (Object item : list) {
-                if (!(item instanceof Map<?, ?> map)) continue;
+        if (!(input instanceof List<?> list)) {
+            return all;
+        }
 
-                String role = map.get("role") != null ? map.get("role").toString() : "user";
-                Object content = map.get("content");
+        for (Object item : list) {
+            if (!(item instanceof Map<?, ?> map)) continue;
 
-                String text = extractText(content);
+            String type = map.get("type") != null ? map.get("type").toString() : "";
 
-                if (text != null && !text.isBlank()) {
-                    messages.add(new OllamaChatRequest.Message(role, text));
+            // ─── function_call: пропускаем, модель сама знает, что вызвала ───
+            if ("function_call".equals(type)) {
+                continue;
+            }
+
+            // ─── function_call_output: результат tool → передаём как user ───
+            if ("function_call_output".equals(type)) {
+                String output = map.get("output") != null ? map.get("output").toString() : "";
+                if (!output.isBlank()) {
+                    all.add(new OllamaChatRequest.Message(
+                            "user",
+                            "[Tool result]\n" + output
+                    ));
                 }
+                continue;
+            }
+
+            // ─── обычное message ───
+            String role = map.get("role") != null ? map.get("role").toString() : "user";
+            String text = extractText(map.get("content"));
+            if (text != null && !text.isBlank()) {
+                // ⚠️ Пропускаем assistant-сообщения с "was completed" —
+                // они дублируют function_call_output
+                if ("assistant".equals(role) && text.startsWith("db_") && text.contains("was completed")) {
+                    continue;
+                }
+                all.add(new OllamaChatRequest.Message(role, text));
             }
         }
 
-        return messages;
+        // 👇 Фильтрация дублей: system + assistant + ПОСЛЕДНЕЕ user
+        List<OllamaChatRequest.Message> result = new ArrayList<>();
+
+        // 1. Первый system
+        all.stream()
+                .filter(m -> "system".equals(m.getRole()))
+                .findFirst()
+                .ifPresent(result::add);
+
+        // 2. Все assistant
+        all.stream()
+                .filter(m -> "assistant".equals(m.getRole()))
+                .forEach(result::add);
+
+        // 3. Последнее user (мог быть function_call_output)
+        for (int i = all.size() - 1; i >= 0; i--) {
+            if ("user".equals(all.get(i).getRole())) {
+                result.add(all.get(i));
+                break;
+            }
+        }
+
+        log.info("→ Converted messages: {} in → {} out", all.size(), result.size());
+        return result;
     }
 
     /**
@@ -206,9 +248,18 @@ public class OllamaProvider implements AiProvider {
             String callId = "call_" + UUID.randomUUID().toString().replace("-", "");
             String fcId = "fc_" + UUID.randomUUID().toString().replace("-", "");
 
+            String toolName = tc.getFunction().getName();
+            Map<String, Object> args = tc.getFunction().getArguments();
+
+
+            if (args == null || args.isEmpty()) {
+                args = defaultArgsFor(toolName);
+                log.info("→ Empty args from model, injecting defaults for {}: {}", toolName, args);
+            }
+
             String argsJson;
             try {
-                argsJson = objectMapper.writeValueAsString(tc.getFunction().getArguments());
+                argsJson = objectMapper.writeValueAsString(args);
             } catch (Exception e) {
                 log.warn("Cannot serialize tool args", e);
                 argsJson = "{}";
@@ -216,17 +267,11 @@ public class OllamaProvider implements AiProvider {
 
             OpenAiResponsesResponse.FunctionCallItem fc =
                     new OpenAiResponsesResponse.FunctionCallItem(
-                            "function_call",
-                            fcId,
-                            callId,
-                            tc.getFunction().getName(),
-                            argsJson,
-                            "completed"
+                            "function_call", fcId, callId, toolName, argsJson, "completed"
                     );
 
             output.add(fc);
-            log.info("→ Returning function_call: name={}, callId={}, args={}",
-                    tc.getFunction().getName(), callId, argsJson);
+            log.info("→ Returning function_call: name={}, callId={}, args={}", toolName, callId, argsJson);
         }
 
         return new OpenAiResponsesResponse(
@@ -238,6 +283,20 @@ public class OllamaProvider implements AiProvider {
                 output,
                 new OpenAiResponsesResponse.Usage(0, 0, 0)
         );
+    }
+
+    /**
+     * Дефолтные аргументы для tools, которые DBeaver передаёт с пустым args.
+     * Схема/каталог берётся из контекста, который DBeaver вкладывает в system-промпт.
+     */
+    private Map<String, Object> defaultArgsFor(String toolName) {
+        return switch (toolName) {
+            case "db_listTableNames", "db_listSchemaNames" ->
+                    Map.of("schemaNames", "public");
+            case "db_getTableDetails" ->
+                    Map.of("tableNames", "");
+            default -> Map.of();
+        };
     }
 
     private OpenAiChatResponse buildChatResponse(String answer) {

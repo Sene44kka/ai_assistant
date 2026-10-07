@@ -47,7 +47,7 @@ public class OpenAiController {
         log.info("→ DBeaver [responses] received");
         log.info("  model:        {}", request.getModel());
         log.info("  instructions: {}", truncate(request.getInstructions(), 200));
-        log.info("  input:        {}", truncate(String.valueOf(request.getInput()), 2000));
+        log.info("  input:        {}", truncate(String.valueOf(request.getInput()), 3000));
         log.info("  temperature:  {}", request.getTemperature());
         log.info("══════════════════════════════════════════════════════");
 

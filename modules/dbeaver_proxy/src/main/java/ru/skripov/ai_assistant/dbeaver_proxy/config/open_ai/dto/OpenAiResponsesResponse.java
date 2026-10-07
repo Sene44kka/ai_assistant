@@ -44,6 +44,7 @@ public class OpenAiResponsesResponse {
     public static class FunctionCallItem {
         private String type;
         private String id;
+        @JsonProperty("call_id")
         private String callId;
         private String name;
         private String arguments;
