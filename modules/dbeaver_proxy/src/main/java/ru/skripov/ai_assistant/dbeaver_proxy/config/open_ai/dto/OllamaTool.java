@@ -13,7 +13,7 @@ import java.util.Map;
 @AllArgsConstructor
 public class OllamaTool {
 
-    private String type;      // "function"
+    private String type;
     private Function function;
 
     @Data

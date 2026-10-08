@@ -17,6 +17,7 @@ import java.util.UUID;
 @Component
 public class OllamaProvider implements AiProvider {
     private static final String PROVIDER_NAME = "ollama";
+    private static final String AI_MODEL_TYPE_ANSWER = "function_call";
 
     @Value("${ollama.url}")
     private String ollamaUrl;
@@ -119,12 +120,18 @@ public class OllamaProvider implements AiProvider {
         String lastSystem = null;
 
         for (Object item : list) {
-            if (!(item instanceof Map<?, ?> map)) continue;
+            if (!(item instanceof Map<?, ?> map)) {
+                continue;
+            }
 
             String type = map.get("type") != null ? map.get("type").toString() : "";
 
-            if ("function_call".equals(type)) continue;
+            //Это если наша ИИ модель шлет запрос в DBeaver, она делает это с этим типом
+            if ("function_call".equals(type)) {
+                continue;
+            }
 
+            //Это когда DBeaver отвечает на тип function_call
             if ("function_call_output".equals(type)) {
                 String output = map.get("output") != null ? map.get("output").toString() : "";
                 if (!output.isBlank()) {
@@ -138,7 +145,10 @@ public class OllamaProvider implements AiProvider {
 
             String role = map.get("role") != null ? map.get("role").toString() : "user";
             String text = extractText(map.get("content"));
-            if (text == null || text.isBlank()) continue;
+
+            if (text == null || text.isBlank()) {
+                continue;
+            }
 
             if ("system".equals(role)) {
                 lastSystem = text;

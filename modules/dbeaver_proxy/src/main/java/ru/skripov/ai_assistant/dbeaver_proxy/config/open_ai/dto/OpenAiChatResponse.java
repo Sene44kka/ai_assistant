@@ -34,7 +34,7 @@ public class OpenAiChatResponse {
     @Data
     @AllArgsConstructor
     public static class Message {
-        private String role;       // "assistant"
+        private String role;       //assistant
         private String content;
     }
 

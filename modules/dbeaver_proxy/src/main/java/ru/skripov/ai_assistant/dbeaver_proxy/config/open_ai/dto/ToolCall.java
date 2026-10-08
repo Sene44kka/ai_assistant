@@ -12,8 +12,8 @@ import lombok.Data;
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class ToolCall {
-    private String id;      // "call_abc123"
-    private String type;    // "function"
+    private String id;      //call_abc123
+    private String type;    //function
 
     @JsonProperty("function")
     private FunctionCall function;
@@ -21,7 +21,7 @@ public class ToolCall {
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class FunctionCall {
-        private String name;         // "db_listTableNames"
+        private String name;         // db_listTableNames
         private String arguments;    // JSON-строка: '{"schemaNames":"public"}'
     }
 }

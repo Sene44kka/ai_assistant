@@ -22,7 +22,7 @@ public class OpenAiChatRequest {
     @Data
     @JsonIgnoreProperties(ignoreUnknown = true)
     public static class Message {
-        private String role;      // "system" | "user" | "assistant" | "tool"
+        private String role;      //system | user | assistant | tool
         private String content;
     }
 }
