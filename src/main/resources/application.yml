@@ -43,3 +43,14 @@ logging:
     org.apache.tomcat: INFO
     org.springframework.boot.web.embedded.tomcat: INFO
     org.apache.catalina: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
+  endpoint:
+    health:
+      show-details: never
+  server:
+    port: 8085

@@ -55,6 +55,9 @@ dependencies {
     // HTTP клиент
     implementation libs.okhttp
 
+    //Метрики
+    implementation libs.bundles.metrics
+
     //modules
     implementation project(':dbeaver_proxy')
 
