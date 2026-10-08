@@ -16,7 +16,8 @@ import java.util.*;
 public class OllamaProvider implements AiProvider {
     private static final String PROVIDER_NAME = "ollama";
     private static final String AI_MODEL_TYPE_ANSWER = "function_call";
-    private static final Integer MAX_HISTORY_MESSAGES = 10;
+    private static final int MAX_HISTORY_MESSAGES = 10;
+    private static final int LAST_USER_MESSAGES_COUNT = 2;
 
     @Value("${ollama.url}")
     private String ollamaUrl;
@@ -212,11 +213,16 @@ public class OllamaProvider implements AiProvider {
                 .ifPresent(result::add);
 
         int startIdx = 0;
+        int showLastUserMessagesCount = 0;
         for (int i = all.size() - 1; i >= 0; i--) {
             OllamaChatRequest.Message m = all.get(i);
             if ("user".equals(m.getRole()) && (m.getToolCalls() == null || m.getToolCalls().isEmpty())) {
+                showLastUserMessagesCount++;
                 startIdx = i;
-                break;
+
+                if (showLastUserMessagesCount == LAST_USER_MESSAGES_COUNT) {
+                    break;
+                }
             }
         }
 
