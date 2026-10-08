@@ -2,6 +2,7 @@ package ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.controller;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.web.bind.annotation.*;
 import ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto.OpenAiChatRequest;
 import ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto.OpenAiChatResponse;
@@ -18,6 +19,9 @@ import static org.apache.commons.lang3.StringUtils.truncate;
 @RestController
 @RequestMapping("/dbeaver_proxy")
 public class OpenAiController {
+    @Value("${ollama.default-model}")
+    private String defaultModel;
+
     private final ChatService chatService;
     private final ObjectMapper objectMapper = new ObjectMapper();
 
@@ -75,7 +79,7 @@ public class OpenAiController {
                 "object", "list",
                 "data", List.of(
                         Map.of(
-                                "id", "qwen3.5:9b",
+                                "id", defaultModel,
                                 "object", "model",
                                 "created", System.currentTimeMillis() / 1000,
                                 "owned_by", "ollama"

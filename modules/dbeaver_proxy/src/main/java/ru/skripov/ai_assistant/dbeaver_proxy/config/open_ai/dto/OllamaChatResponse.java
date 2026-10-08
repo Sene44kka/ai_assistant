@@ -6,16 +6,6 @@ import lombok.Data;
 
 import java.util.List;
 
-/**
- * Ответ от Ollama (POST /api/chat, stream=false).
- * Пример:
- * {
- *   "model": "qwen3.5:9b",
- *   "created_at": "2024-10-10T12:00:00Z",
- *   "message": { "role": "assistant", "content": "Hello" },
- *   "done": true
- * }
- */
 @Data
 @JsonIgnoreProperties(ignoreUnknown = true)
 public class OllamaChatResponse {
