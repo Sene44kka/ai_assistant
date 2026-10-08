@@ -1,5 +1,6 @@
 package ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.provider;
 
+import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
@@ -8,16 +9,14 @@ import org.springframework.web.reactive.function.client.WebClient;
 import ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto.*;
 
 import java.time.Duration;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 @Slf4j
 @Component
 public class OllamaProvider implements AiProvider {
     private static final String PROVIDER_NAME = "ollama";
     private static final String AI_MODEL_TYPE_ANSWER = "function_call";
+    private static final Integer MAX_HISTORY_MESSAGES = 10;
 
     @Value("${ollama.url}")
     private String ollamaUrl;
@@ -40,7 +39,7 @@ public class OllamaProvider implements AiProvider {
     @Override
     public OpenAiChatResponse chat(OpenAiChatRequest request) {
         List<OllamaChatRequest.Message> ollamaMessages = request.getMessages().stream()
-                .map(m -> new OllamaChatRequest.Message(m.getRole(), m.getContent()))
+                .map(m -> new OllamaChatRequest.Message(m.getRole(), m.getContent(), null, null))
                 .toList();
 
         OllamaChatResponse.Message msg = callOllama(ollamaMessages, request.getTemperature(), null);
@@ -112,12 +111,10 @@ public class OllamaProvider implements AiProvider {
         Object input = request.getInput();
         if (!(input instanceof List<?> list)) {
             if (input instanceof String s) {
-                all.add(new OllamaChatRequest.Message("user", s));
+                all.add(new OllamaChatRequest.Message("user", s, null, null));
             }
             return all;
         }
-
-        String lastSystem = null;
 
         for (Object item : list) {
             if (!(item instanceof Map<?, ?> map)) {
@@ -128,75 +125,108 @@ public class OllamaProvider implements AiProvider {
 
             //Это если наша ИИ модель шлет запрос в DBeaver, она делает это с этим типом
             if ("function_call".equals(type)) {
+                String name = (String) map.get("name");
+                String callId = (String) map.get("call_id");
+                String arguments = (String) map.get("arguments");
+
+                OllamaToolCall.Function fn = new OllamaToolCall.Function();
+                fn.setName(name);
+                fn.setArguments(parseArgs(arguments));
+
+                OllamaToolCall tc = new OllamaToolCall();
+                tc.setFunction(fn);
+                tc.setId(callId);
+
+                OllamaChatRequest.Message assistantMsg = new OllamaChatRequest.Message();
+                assistantMsg.setRole("assistant");
+                assistantMsg.setContent("");
+                assistantMsg.setToolCalls(List.of(tc));
+                all.add(assistantMsg);
+
+                log.info("→ Added assistant message with tool_call: {} ({})", name, callId);
                 continue;
             }
 
             //Это когда DBeaver отвечает на тип function_call
             if ("function_call_output".equals(type)) {
+                String callId = (String) map.get("call_id");
                 String output = map.get("output") != null ? map.get("output").toString() : "";
-                if (!output.isBlank()) {
-                    all.add(new OllamaChatRequest.Message(
-                            "user",
-                            "[Tool result]\n" + truncate(output, 6000)
-                    ));
-                }
+
+                OllamaChatRequest.Message toolMsg = new OllamaChatRequest.Message();
+                toolMsg.setRole("tool");
+                toolMsg.setContent(output);
+                toolMsg.setToolCallId(callId);
+                all.add(toolMsg);
+
+                log.info("→ Added tool message: call_id={}, {} chars", callId, output.length());
                 continue;
             }
 
             String role = map.get("role") != null ? map.get("role").toString() : "user";
             String text = extractText(map.get("content"));
 
-            if (text == null || text.isBlank()) {
-                continue;
+            if (text != null && !text.isBlank()) {
+                if ("assistant".equals(role) && text.startsWith("db_") && text.contains("was completed")) {
+                    continue;
+                }
+                all.add(new OllamaChatRequest.Message(role, text, null, null));
             }
+        }
 
-            if ("system".equals(role)) {
-                lastSystem = text;
-                continue;
-            }
+        log.info("→ Converted messages: {} in → {} out", list.size(), all.size());
+        for (int i = 0; i < all.size(); i++) {
+            OllamaChatRequest.Message m = all.get(i);
+            String preview = Optional.ofNullable(m.getContent())
+                    .map(it -> it.replace("\n", " ").trim())
+                    .orElse("");
+            log.info("   [{}] role={}, toolCalls={}, toolCallId={}, content={}",
+                    i, m.getRole(),
+                    m.getToolCalls() != null ? m.getToolCalls().size() : 0,
+                    m.getToolCallId(),
+                    preview);
+        }
 
-            if ("assistant".equals(role)
-                    && text.contains("was completed")
-                    && text.length() > 200) {
-                continue;
-            }
+        return trimHistory(all);
+    }
 
-            all.add(new OllamaChatRequest.Message(role, text));
+    private Map<String, Object> parseArgs(String argumentsJson) {
+        if (argumentsJson == null || argumentsJson.isBlank()) return Map.of();
+        try {
+            return objectMapper.readValue(argumentsJson, new TypeReference<>() {});
+        } catch (Exception e) {
+            log.warn("Cannot parse args: {}", argumentsJson, e);
+            return Map.of();
+        }
+    }
+
+    private List<OllamaChatRequest.Message> trimHistory(List<OllamaChatRequest.Message> all) {
+        if (all.size() <= MAX_HISTORY_MESSAGES) {
+            return all;
         }
 
         List<OllamaChatRequest.Message> result = new ArrayList<>();
 
-        if (lastSystem != null) {
-            result.add(new OllamaChatRequest.Message("system", lastSystem));
-        }
+        all.stream()
+                .filter(m -> "system".equals(m.getRole()))
+                .findFirst()
+                .ifPresent(result::add);
 
-        int maxHistory = 10;
-        int fromIndex = Math.max(0, all.size() - maxHistory);
-        result.addAll(all.subList(fromIndex, all.size()));
-
-        log.info("→ Converted messages: {} in → {} out (truncated to last {})",
-                list.size(), result.size(), maxHistory);
-        for (int i = 0; i < result.size(); i++) {
-            OllamaChatRequest.Message m = result.get(i);
-            String preview = m.getContent() != null && m.getContent().length() > 100
-                    ? m.getContent().substring(0, 100).replace("\n", " ") + "..."
-                    : m.getContent();
-            log.info("   [{}] {}: {}", i, m.getRole(), preview);
-        }
-
-        if (!result.isEmpty()) {
-            OllamaChatRequest.Message last = result.get(result.size() - 1);
-            if (!"user".equals(last.getRole())) {
-                log.warn("⚠️ Last message is NOT user! Role={}", last.getRole());
+        int startIdx = 0;
+        for (int i = all.size() - 1; i >= 0; i--) {
+            OllamaChatRequest.Message m = all.get(i);
+            if ("user".equals(m.getRole()) && (m.getToolCalls() == null || m.getToolCalls().isEmpty())) {
+                startIdx = i;
+                break;
             }
         }
 
-        return result;
-    }
+        int fromIdx = Math.max(startIdx, all.size() - MAX_HISTORY_MESSAGES);
+        for (int i = fromIdx; i < all.size(); i++) {
+            result.add(all.get(i));
+        }
 
-    private String truncate(String s, int max) {
-        if (s == null) return "";
-        return s.length() > max ? s.substring(0, max) + "...[truncated]" : s;
+        log.info("→ Trimmed history: {} → {} messages (from idx {})", all.size(), result.size(), fromIdx);
+        return result;
     }
 
     /**

@@ -28,6 +28,10 @@ public class OllamaChatRequest {
     public static class Message {
         private String role;
         private String content;
+        @JsonProperty("tool_calls")
+        private List<OllamaToolCall> toolCalls;
+        @JsonProperty("tool_call_id")
+        private String toolCallId;
     }
 
     @Data
