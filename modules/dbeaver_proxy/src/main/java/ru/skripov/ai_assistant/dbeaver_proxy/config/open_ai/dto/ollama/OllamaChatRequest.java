@@ -4,6 +4,7 @@ import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.enums.OllamaRole;
 
 import java.util.List;
 
@@ -26,7 +27,7 @@ public class OllamaChatRequest {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class Message {
-        private String role;
+        private OllamaRole role;
         private String content;
         @JsonProperty("tool_calls")
         private List<OllamaToolCall> toolCalls;

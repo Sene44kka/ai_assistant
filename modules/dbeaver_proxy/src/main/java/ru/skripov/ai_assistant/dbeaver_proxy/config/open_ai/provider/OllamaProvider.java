@@ -8,6 +8,7 @@ import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto.*;
 import ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto.ollama.*;
+import ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.enums.OllamaRole;
 
 import java.time.Duration;
 import java.util.*;
@@ -40,7 +41,7 @@ public class OllamaProvider implements AiProvider {
     @Override
     public OpenAiChatResponse chat(OpenAiChatRequest request) {
         List<OllamaChatRequest.Message> ollamaMessages = request.getMessages().stream()
-                .map(m -> new OllamaChatRequest.Message(m.getRole(), m.getContent(), null, null))
+                .map(m -> new OllamaChatRequest.Message(OllamaRole.fromValue(m.getRole()), m.getContent(), null, null))
                 .toList();
         String ollamaModel = Optional.ofNullable(request.getModel()).orElse(defaultModel);
 
@@ -115,7 +116,7 @@ public class OllamaProvider implements AiProvider {
         Object input = request.getInput();
         if (!(input instanceof List<?> list)) {
             if (input instanceof String s) {
-                all.add(new OllamaChatRequest.Message("user", s, null, null));
+                all.add(new OllamaChatRequest.Message(OllamaRole.USER, s, null, null));
             }
             return all;
         }
@@ -142,7 +143,7 @@ public class OllamaProvider implements AiProvider {
                 tc.setId(callId);
 
                 OllamaChatRequest.Message assistantMsg = new OllamaChatRequest.Message();
-                assistantMsg.setRole("assistant");
+                assistantMsg.setRole(OllamaRole.ASSISTANT);
                 assistantMsg.setContent("");
                 assistantMsg.setToolCalls(List.of(tc));
                 all.add(assistantMsg);
@@ -157,7 +158,7 @@ public class OllamaProvider implements AiProvider {
                 String output = map.get("output") != null ? map.get("output").toString() : "";
 
                 OllamaChatRequest.Message toolMsg = new OllamaChatRequest.Message();
-                toolMsg.setRole("tool");
+                toolMsg.setRole(OllamaRole.TOOL);
                 toolMsg.setContent(output);
                 toolMsg.setToolCallId(callId);
                 all.add(toolMsg);
@@ -166,11 +167,11 @@ public class OllamaProvider implements AiProvider {
                 continue;
             }
 
-            String role = map.get("role") != null ? map.get("role").toString() : "user";
+            OllamaRole role = map.get("role") != null ? OllamaRole.fromValue(map.get("role").toString()) : OllamaRole.USER;
             String text = extractText(map.get("content"));
 
             if (text != null && !text.isBlank()) {
-                if ("assistant".equals(role) && text.startsWith("db_") && text.contains("was completed")) {
+                if (OllamaRole.ASSISTANT == role && text.startsWith("db_") && text.contains("was completed")) {
                     continue;
                 }
 //                if ("system".equals(role)) {
@@ -230,7 +231,7 @@ public class OllamaProvider implements AiProvider {
 
         List<OllamaChatRequest.Message> result = new ArrayList<>();
         all.stream()
-                .filter(m -> "system".equals(m.getRole()))
+                .filter(m -> OllamaRole.SYSTEM == m.getRole())
                 .findFirst()
                 .ifPresent(result::add);
 
@@ -266,10 +267,10 @@ public class OllamaProvider implements AiProvider {
         List<OllamaChatRequest.Message> current = new ArrayList<>();
 
         for (OllamaChatRequest.Message m : all) {
-            if ("system".equals(m.getRole())) {
+            if (OllamaRole.SYSTEM == m.getRole()) {
                 continue;
             }
-            if ("user".equals(m.getRole()) && !current.isEmpty()) {
+            if (OllamaRole.USER == m.getRole() && !current.isEmpty()) {
                 turns.add(current);
                 current = new ArrayList<>();
             }
@@ -288,7 +289,7 @@ public class OllamaProvider implements AiProvider {
     private boolean isTurnComplete(List<OllamaChatRequest.Message> turn) {
         return turn.stream()
                 .anyMatch(
-                        m -> "assistant".equals(m.getRole())
+                        m -> OllamaRole.ASSISTANT == m.getRole()
                                 && (m.getToolCalls() == null || m.getToolCalls().isEmpty())
                                 && m.getContent() != null
                                 && !m.getContent().isBlank()
