@@ -5,6 +5,8 @@ import ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto.OpenAiChatRespon
 import ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto.OpenAiResponsesRequest;
 import ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto.OpenAiResponsesResponse;
 
+import java.util.List;
+
 /**
  * Провайдер, который умеет обработать OpenAI-совместимый запрос
  * и вернуть OpenAI-совместимый ответ.
@@ -19,4 +21,6 @@ public interface AiProvider {
     OpenAiChatResponse chat(OpenAiChatRequest request);
 
     OpenAiResponsesResponse responses(OpenAiResponsesRequest request);
+
+    List<String> listModels();
 }

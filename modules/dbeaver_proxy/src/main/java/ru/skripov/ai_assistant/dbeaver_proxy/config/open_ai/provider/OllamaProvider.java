@@ -42,8 +42,9 @@ public class OllamaProvider implements AiProvider {
         List<OllamaChatRequest.Message> ollamaMessages = request.getMessages().stream()
                 .map(m -> new OllamaChatRequest.Message(m.getRole(), m.getContent(), null, null))
                 .toList();
+        String ollamaModel = Optional.ofNullable(request.getModel()).orElse(defaultModel);
 
-        OllamaChatResponse.Message msg = callOllama(ollamaMessages, request.getTemperature(), null);
+        OllamaChatResponse.Message msg = callOllama(ollamaModel, ollamaMessages, request.getTemperature(), null);
         return buildChatResponse(msg.getContent());
     }
 
@@ -51,8 +52,9 @@ public class OllamaProvider implements AiProvider {
     public OpenAiResponsesResponse responses(OpenAiResponsesRequest request) {
         List<OllamaChatRequest.Message> ollamaMessages = convertResponsesToOllamaMessages(request);
         List<OllamaTool> ollamaTools = convertTools(request.getTools());
+        String ollamaModel = Optional.ofNullable(request.getModel()).orElse(defaultModel);
 
-        OllamaChatResponse.Message msg = callOllama(ollamaMessages, request.getTemperature(), ollamaTools);
+        OllamaChatResponse.Message msg = callOllama(ollamaModel, ollamaMessages, request.getTemperature(), ollamaTools);
 
         if (msg.getToolCalls() != null && !msg.getToolCalls().isEmpty()) {
             return buildFunctionCallResponse(msg.getToolCalls());
@@ -61,18 +63,19 @@ public class OllamaProvider implements AiProvider {
         return buildResponsesResponse(msg.getContent());
     }
 
-    private OllamaChatResponse.Message callOllama(List<OllamaChatRequest.Message> messages,
+    private OllamaChatResponse.Message callOllama(String ollamaModel,
+                                                  List<OllamaChatRequest.Message> messages,
                                                   Double temperature,
                                                   List<OllamaTool> tools) {
         OllamaChatRequest.Options options = new OllamaChatRequest.Options();
         options.setTemperature(temperature != null ? temperature : 0.1);
 
         OllamaChatRequest ollamaRequest = new OllamaChatRequest(
-                defaultModel, messages, false, false, options, tools
+                ollamaModel, messages, false, false, options, tools
         );
 
         log.info("→ Ollama: POST {}/api/chat, model={}, messages={}, tools={}, temp={}",
-                ollamaUrl, defaultModel, messages.size(),
+                ollamaUrl, ollamaModel, messages.size(),
                 tools != null ? tools.size() : 0,
                 options.getTemperature());
 
@@ -391,5 +394,35 @@ public class OllamaProvider implements AiProvider {
                 List.of(outputItem),
                 new OpenAiResponsesResponse.Usage(0, 0, 0)
         );
+    }
+
+    public List<String> listModels() {
+        try {
+            OllamaTagsResponse response = webClientBuilder
+                    .baseUrl(ollamaUrl)
+                    .build()
+                    .get()
+                    .uri("/api/tags")
+                    .retrieve()
+                    .bodyToMono(OllamaTagsResponse.class)
+                    .timeout(Duration.ofSeconds(10))
+                    .block();
+
+            if (response == null || response.getModels() == null) {
+                log.warn("Ollama returned empty model list");
+                return List.of();
+            }
+
+            List<String> names = response.getModels().stream()
+                    .map(OllamaTagsResponse.ModelInfo::getName)
+                    .toList();
+
+            log.info("→ Ollama has {} models: {}", names.size(), names);
+            return names;
+
+        } catch (Exception e) {
+            log.error("Failed to fetch models from Ollama: {}", e.getMessage());
+            return List.of();
+        }
     }
 }

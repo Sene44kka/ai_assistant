@@ -41,6 +41,12 @@ public class ChatService {
         return provider.responses(request);
     }
 
+    public List<String> listModels(String providerName) {
+        AiProvider provider = resolve(providerName);
+        log.debug("Using provider '{}' for listModels", provider.name());
+        return provider.listModels();
+    }
+
     private AiProvider resolve(String providerName) {
         String name = (providerName == null || providerName.isBlank()) ? defaultProvider : providerName;
         AiProvider provider = providers.get(name);

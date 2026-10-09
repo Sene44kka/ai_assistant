@@ -88,14 +88,14 @@ docker compose exec ollama ollama pull qwen3.5:9b
 curl http://localhost:8085/actuator/health
 # Expected: {"status":"UP"}
 
-curl http://localhost:8085/dbeaver_proxy/models
+curl http://localhost:8085/dbeaver_proxy/ollama/models
 # Expected: {"object":"list","data":[{"id":"qwen3.5:9b","object":"model",...}]}
 ```
 
 **5. Test with curl** (before wiring DBeaver):
 
 ```bash
-curl -X POST http://localhost:8085/dbeaver_proxy/chat/completions \
+curl -X POST http://localhost:8085/dbeaver_proxy/ollama/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
     "model": "qwen3.5:9b",
@@ -127,7 +127,7 @@ Started AiAssistantApplication in X seconds
 1. Open DBeaver → **`Window` → `Preferences` → `AI` → `Model configurations`**.
 2. Click the **`+`** button.
 3. Select **`OpenAI`** as the engine.
-4. ![img.png](img.png)
+4. ![img.png](img.png) (API token - dummy)
 5. Click **`Test connection`** → **`Apply and Close`**.
 
 Now open **AI Chat** in DBeaver and ask something like:
