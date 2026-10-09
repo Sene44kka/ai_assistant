@@ -1,4 +1,4 @@
-package ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto;
+package ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto.ollama;
 
 import com.fasterxml.jackson.annotation.JsonProperty;
 import lombok.AllArgsConstructor;

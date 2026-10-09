@@ -1,4 +1,4 @@
-package ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto;
+package ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto.ollama;
 
 import lombok.AllArgsConstructor;
 import lombok.Data;

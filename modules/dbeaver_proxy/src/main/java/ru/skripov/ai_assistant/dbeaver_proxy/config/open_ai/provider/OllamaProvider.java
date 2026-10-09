@@ -7,6 +7,7 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.reactive.function.client.WebClient;
 import ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto.*;
+import ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.dto.ollama.*;
 
 import java.time.Duration;
 import java.util.*;
@@ -16,8 +17,7 @@ import java.util.*;
 public class OllamaProvider implements AiProvider {
     private static final String PROVIDER_NAME = "ollama";
     private static final String AI_MODEL_TYPE_ANSWER = "function_call";
-    private static final int MAX_HISTORY_MESSAGES = 10;
-    private static final int LAST_USER_MESSAGES_COUNT = 2;
+    private static final int LAST_USER_MESSAGES_COUNT = 5;
 
     @Value("${ollama.url}")
     private String ollamaUrl;
@@ -173,6 +173,26 @@ public class OllamaProvider implements AiProvider {
                 if ("assistant".equals(role) && text.startsWith("db_") && text.contains("was completed")) {
                     continue;
                 }
+//                if ("system".equals(role)) {
+//                    text = text +
+//                            """
+//                                    Instructions:
+//                                    - You are the DBeaver AI assistant.
+//                                    - Act as a database architect and SQL expert.
+//                                    - **You have access to special tools to inspect the database schema. You MUST use these tools whenever you lack information about tables, columns, or indexes.**
+//                                    - **NEVER write tool calls as plain text JSON inside the message content. ALWAYS use the native tool_calls API mechanism.**
+//                                    - **If the user asks for table indexes and you don't know them, you MUST call the 'db_listTableIndexes' tool immediately.**
+//                                    - Rely only on the provided schema information, do not make assumptions.
+//                                    - Use the same language as the user.
+//                                    - By default generate SQL queries according to user requests. Also answer to general database related questions.
+//                                    - If user wants to see table data then show it in markdown table format by default.
+//                                    - Stick strictly to SQL dialect syntax.
+//                                    - Do not invent columns, tables, or data that aren't explicitly defined.
+//                                    - Use "" to quote identifiers if needed.
+//                                    - Use '' to quote strings.
+//                                    - Joins and sub‑queries are allowed.
+//                            """;
+//                }
                 all.add(new OllamaChatRequest.Message(role, text, null, null));
             }
         }
@@ -204,38 +224,75 @@ public class OllamaProvider implements AiProvider {
     }
 
     private List<OllamaChatRequest.Message> trimHistory(List<OllamaChatRequest.Message> all) {
-        if (all.size() <= MAX_HISTORY_MESSAGES) {
+        if (all.isEmpty()) {
             return all;
         }
 
         List<OllamaChatRequest.Message> result = new ArrayList<>();
-
         all.stream()
                 .filter(m -> "system".equals(m.getRole()))
                 .findFirst()
                 .ifPresent(result::add);
 
-        int startIdx = 0;
-        int showLastUserMessagesCount = 0;
-        for (int i = all.size() - 1; i >= 0; i--) {
-            OllamaChatRequest.Message m = all.get(i);
-            if ("user".equals(m.getRole()) && (m.getToolCalls() == null || m.getToolCalls().isEmpty())) {
-                showLastUserMessagesCount++;
-                startIdx = i;
+        List<List<OllamaChatRequest.Message>> turns = splitIntoTurns(all);
+        List<List<OllamaChatRequest.Message>> completeTurns = new ArrayList<>();
+        for (int i = 0; i < turns.size(); i++) {
+            List<OllamaChatRequest.Message> turn = turns.get(i);
+            boolean isLast = (i == turns.size() - 1);
+            boolean isComplete = isTurnComplete(turn);
 
-                if (showLastUserMessagesCount == LAST_USER_MESSAGES_COUNT) {
-                    break;
-                }
+            if (isComplete || isLast) {
+                completeTurns.add(turn);
+            } else {
+                log.info("→ Skipping incomplete turn #{} (no assistant response)", i);
             }
         }
 
-        int fromIdx = Math.max(startIdx, all.size() - MAX_HISTORY_MESSAGES);
-        for (int i = fromIdx; i < all.size(); i++) {
-            result.add(all.get(i));
+        int fromTurn = Math.max(0, completeTurns.size() - LAST_USER_MESSAGES_COUNT);
+        for (int i = fromTurn; i < completeTurns.size(); i++) {
+            result.addAll(completeTurns.get(i));
         }
 
-        log.info("→ Trimmed history: {} → {} messages (from idx {})", all.size(), result.size(), fromIdx);
+        log.info("→ Trimmed history: {} → {} messages ({} turns total, {} complete, kept last {})", all.size(), result.size(), turns.size(), completeTurns.size(), LAST_USER_MESSAGES_COUNT);
         return result;
+    }
+
+    /**
+     * Разбивает историю на "тёрны": каждый turn = user + все последующие assistant/tool
+     * до следующего user.
+     */
+    private List<List<OllamaChatRequest.Message>> splitIntoTurns(List<OllamaChatRequest.Message> all) {
+        List<List<OllamaChatRequest.Message>> turns = new ArrayList<>();
+        List<OllamaChatRequest.Message> current = new ArrayList<>();
+
+        for (OllamaChatRequest.Message m : all) {
+            if ("system".equals(m.getRole())) {
+                continue;
+            }
+            if ("user".equals(m.getRole()) && !current.isEmpty()) {
+                turns.add(current);
+                current = new ArrayList<>();
+            }
+            current.add(m);
+        }
+        if (!current.isEmpty()) {
+            turns.add(current);
+        }
+        return turns;
+    }
+
+    /**
+     * Тёрн COMPLETE, если в нём есть хотя бы один assistant с непустым content
+     * и без toolCalls (это финальный ответ модели).
+     */
+    private boolean isTurnComplete(List<OllamaChatRequest.Message> turn) {
+        return turn.stream()
+                .anyMatch(
+                        m -> "assistant".equals(m.getRole())
+                                && (m.getToolCalls() == null || m.getToolCalls().isEmpty())
+                                && m.getContent() != null
+                                && !m.getContent().isBlank()
+                );
     }
 
     /**
@@ -266,7 +323,6 @@ public class OllamaProvider implements AiProvider {
         log.info("→ Converted {} tools to Ollama format", result.size());
         return result;
     }
-
 
     private String extractText(Object content) {
         if (content == null) {
