@@ -3,7 +3,7 @@ package ru.skripov.ai_assistant.dbeaver_proxy.config.open_ai.enums;
 import com.fasterxml.jackson.annotation.JsonCreator;
 import com.fasterxml.jackson.annotation.JsonValue;
 
-public enum OllamaRole {
+public enum Role {
 
     SYSTEM("system"),
     USER("user"),
@@ -12,7 +12,7 @@ public enum OllamaRole {
 
     private final String value;
 
-    OllamaRole(String value) {
+    Role(String value) {
         this.value = value;
     }
 
@@ -28,9 +28,9 @@ public enum OllamaRole {
      * Парсинг из JSON (case-insensitive).
      */
     @JsonCreator
-    public static OllamaRole fromValue(String value) {
+    public static Role fromValue(String value) {
         if (value == null) return null;
-        for (OllamaRole role : values()) {
+        for (Role role : values()) {
             if (role.value.equalsIgnoreCase(value)) {
                 return role;
             }
