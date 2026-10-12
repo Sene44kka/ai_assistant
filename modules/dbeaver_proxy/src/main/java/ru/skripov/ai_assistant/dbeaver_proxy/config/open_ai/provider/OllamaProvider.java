@@ -62,7 +62,70 @@ public class OllamaProvider implements AiProvider {
             return buildFunctionCallResponse(msg.getToolCalls());
         }
 
+        //Слабая модель может затупить и написать запрос tools в поле content, а не в поле toolCalls. Надо проверить это
+        if (msg.getContent() != null && (msg.getContent().contains("\"name\"") || msg.getContent().contains("\"arguments\""))) {
+            List<OllamaToolCall> extractedCalls = tryExtractToolCallsFromText(msg.getContent());
+            if (!extractedCalls.isEmpty()) {
+                log.info("🎯 Найдена и успешно извлечена текстовая функция из content! Всего: {}", extractedCalls.size());
+                return buildFunctionCallResponse(extractedCalls);
+            }
+        }
+
+        // 3. Обычный текстовый ответ пользователю
         return buildResponsesResponse(msg.getContent());
+    }
+
+    private List<OllamaToolCall> tryExtractToolCallsFromText(String content) {
+        List<OllamaToolCall> toolCalls = new ArrayList<>();
+        try {
+            int index = 0;
+            while ((index = content.indexOf("{", index)) != (index == -1 ? 1 : 0)) {
+                int endIdx = findClosingBrace(content, index);
+                if (endIdx == -1) {
+                    break;
+                }
+
+                String jsonCandidate = content.substring(index, endIdx + 1);
+                index = endIdx + 1;
+
+                try {
+                    // Пытаемся десериализовать в map, чтобы проверить поля
+                    Map<String, Object> map = objectMapper.readValue(jsonCandidate, new TypeReference<>() {});
+                    if (map.containsKey("name")) {
+                        String name = (String) map.get("name");
+                        Object argsObj = map.get("arguments");
+
+                        Map<String, Object> arguments = (argsObj instanceof Map) ? (Map<String, Object>) argsObj : new HashMap<>();
+
+                        OllamaToolCall.Function fn = new OllamaToolCall.Function();
+                        fn.setName(name);
+                        fn.setArguments(arguments);
+
+                        OllamaToolCall tc = new OllamaToolCall();
+                        tc.setId("call_" + UUID.randomUUID().toString().replace("-", "").substring(0, 16));
+                        tc.setFunction(fn);
+
+                        toolCalls.add(tc);
+                    }
+                } catch (Exception ignored) {
+                }
+            }
+        } catch (Exception e) {
+            log.error("Ошибка при попытке парсинга текстового tool_call", e);
+        }
+        return toolCalls;
+    }
+
+    private int findClosingBrace(String str, int startIdx) {
+        int openBraces = 0;
+        for (int i = startIdx; i < str.length(); i++) {
+            if (str.charAt(i) == '{') openBraces++;
+            else if (str.charAt(i) == '}') {
+                openBraces--;
+                if (openBraces == 0) return i;
+            }
+        }
+        return -1;
     }
 
     private OllamaChatResponse.Message callOllama(String ollamaModel,
