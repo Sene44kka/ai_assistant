@@ -175,26 +175,7 @@ public class OllamaProvider implements AiProvider {
                 if (role.isAssistant() && text.startsWith("db_") && text.contains("was completed")) {
                     continue;
                 }
-//                if ("system".equals(role)) {
-//                    text = text +
-//                            """
-//                                    Instructions:
-//                                    - You are the DBeaver AI assistant.
-//                                    - Act as a database architect and SQL expert.
-//                                    - **You have access to special tools to inspect the database schema. You MUST use these tools whenever you lack information about tables, columns, or indexes.**
-//                                    - **NEVER write tool calls as plain text JSON inside the message content. ALWAYS use the native tool_calls API mechanism.**
-//                                    - **If the user asks for table indexes and you don't know them, you MUST call the 'db_listTableIndexes' tool immediately.**
-//                                    - Rely only on the provided schema information, do not make assumptions.
-//                                    - Use the same language as the user.
-//                                    - By default generate SQL queries according to user requests. Also answer to general database related questions.
-//                                    - If user wants to see table data then show it in markdown table format by default.
-//                                    - Stick strictly to SQL dialect syntax.
-//                                    - Do not invent columns, tables, or data that aren't explicitly defined.
-//                                    - Use "" to quote identifiers if needed.
-//                                    - Use '' to quote strings.
-//                                    - Joins and sub‑queries are allowed.
-//                            """;
-//                }
+
                 all.add(new OllamaChatRequest.Message(role, text, null, null));
             }
         }
